@@ -68,7 +68,7 @@ export async function voteOnProposal(id: number, voteType: ProposalVoteType): Pr
 
   const { data: currentCounts, error: fetchError } = await supabase
     .from('proposals')
-    .select(column)
+    .select('upvotes, downvotes')
     .eq('id', id)
     .single();
 
@@ -82,10 +82,13 @@ export async function voteOnProposal(id: number, voteType: ProposalVoteType): Pr
     : currentCounts?.downvotes ?? 0;
 
   const nextValue = currentValue + 1;
+  const updatePayload = column === 'upvotes'
+    ? { upvotes: nextValue }
+    : { downvotes: nextValue };
 
   const { data, error } = await supabase
     .from('proposals')
-    .update({ [column]: nextValue })
+    .update(updatePayload)
     .eq('id', id)
     .select('*')
     .single();
