@@ -77,7 +77,11 @@ export async function voteOnProposal(id: number, voteType: ProposalVoteType): Pr
     throw new Error('Failed to fetch proposal counts.');
   }
 
-  const nextValue = (currentCounts?.[column] ?? 0) + 1;
+  const currentValue = column === 'upvotes'
+    ? currentCounts?.upvotes ?? 0
+    : currentCounts?.downvotes ?? 0;
+
+  const nextValue = currentValue + 1;
 
   const { data, error } = await supabase
     .from('proposals')
