@@ -15,9 +15,10 @@ type Idea = {
 };
 
 type Comment = {
-  text: string;
-  userName: string;
-  ts: number;
+  id: number;
+  text: string | null;
+  user_name: string | null;
+  created_at: string;
 };
 
 // ヘルパー関数: 日時フォーマット
@@ -44,23 +45,38 @@ export default function IdeasPage() {
   const [showComments, setShowComments] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOption, setSortOption] = useState<SortOption>("newest");
 
   // --- 初期ロード ---
   useEffect(() => {
-    setLoading(true);
-    const timer = setTimeout(() => {
-      const storedIdeas = localStorage.getItem("ideas");
-      if (storedIdeas) setIdeas(JSON.parse(storedIdeas));
+    const fetchIdeas = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch('/api/proposals', { cache: 'no-store' });
+        if (!res.ok) throw new Error('Failed to fetch proposals');
+        const data: { id: number; text: string; created_at: string; upvotes: number; downvotes: number }[] = await res.json();
+        const mapped = data.map((proposal) => ({
+          id: proposal.id,
+          text: proposal.text ?? '',
+          date: proposal.created_at,
+          upvotes: proposal.upvotes ?? 0,
+          downvotes: proposal.downvotes ?? 0,
+        }));
+        setIdeas(mapped);
+      } catch (err) {
+        console.error(err);
+        setError(t('ideas.error.fetchFailed') || 'Failed to fetch proposals. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-      const storedComments = localStorage.getItem("comments");
-      if (storedComments) setComments(JSON.parse(storedComments));
-      setLoading(false);
-    }, 500); // 500ms待機してローディングを見せる
-
-    return () => clearTimeout(timer);
-  }, []);
+    fetchIdeas();
+  }, [t]);
 
   // --- 検索フィルタリング ---
   const filteredIdeas = useMemo(() => {
@@ -90,41 +106,48 @@ export default function IdeasPage() {
   }, [filteredIdeas, sortOption]);
 
   // --- コメント投稿処理 ---
-  const handlePostComment = () => {
+  const handlePostComment = async () => {
     if (!activeIdea || !newComment.trim()) return;
 
-    const id = activeIdea.id;
-    const ideaComments = comments[id] || [];
-    const randomNames = [
-      "Falcon",
-      "Nova",
-      "Echo",
-      "Sparrow",
-      "Orion",
-      "Lyra",
-      "Comet",
-      "Vega",
-      "Luna",
-      "Pixel",
-    ];
-    const randomName =
-      randomNames[Math.floor(Math.random() * randomNames.length)];
-    const userName = `${String(ideaComments.length + 1).padStart(
-      3,
-      "0"
-    )} ${randomName}`;
+    try {
+      const ideaComments = comments[activeIdea.id] || [];
+      const randomNames = ['Falcon', 'Nova', 'Echo', 'Sparrow', 'Orion', 'Lyra', 'Comet', 'Vega', 'Luna', 'Pixel'];
+      const randomName = randomNames[Math.floor(Math.random() * randomNames.length)];
+      const userName = `${String(ideaComments.length + 1).padStart(3, '0')} ${randomName}`;
 
-    const newEntry: Comment = { text: newComment, userName, ts: Date.now() };
-    const updated = { ...comments, [id]: [...ideaComments, newEntry] };
+      const res = await fetch('/api/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proposalId: activeIdea.id, text: newComment.trim(), userName }),
+      });
 
-    setComments(updated);
-    localStorage.setItem("comments", JSON.stringify(updated));
-    setNewComment("");
+      if (!res.ok) throw new Error('Failed to create comment');
+
+      const created: Comment = await res.json();
+      setComments((prev) => ({ ...prev, [activeIdea.id]: [created, ...(prev[activeIdea.id] || [])] }));
+      setNewComment('');
+    } catch (err) {
+      console.error(err);
+      setError(t('ideas.error.commentFailed') || 'Failed to add comment.');
+    }
   };
 
-  const openComments = (idea: Idea) => {
+  const openComments = async (idea: Idea) => {
     setActiveIdea(idea);
     setShowComments(true);
+    setLoadingComments(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/comments?proposalId=${idea.id}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error('Failed to fetch comments');
+      const data: Comment[] = await res.json();
+      setComments((prev) => ({ ...prev, [idea.id]: data }));
+    } catch (err) {
+      console.error(err);
+      setError(t('ideas.error.commentFetchFailed') || 'Failed to load comments.');
+    } finally {
+      setLoadingComments(false);
+    }
   };
 
   const closeComments = () => {
@@ -135,25 +158,36 @@ export default function IdeasPage() {
   // --- コメント（新しい順）---
   const activeIdeaComments = useMemo(() => {
     if (!activeIdea) return [];
-    const list = comments[activeIdea.id] || [];
-    return [...list].sort((a, b) => b.ts - a.ts);
+    return comments[activeIdea.id] || [];
   }, [activeIdea, comments]);
 
-  const handleUpvote = (id: number) => {
-  const updatedIdeas = ideas.map((idea) =>
-    idea.id === id ? { ...idea, upvotes: idea.upvotes + 1 } : idea
-  );
-  setIdeas(updatedIdeas);
-  localStorage.setItem("ideas", JSON.stringify(updatedIdeas));
-};
+  const handleVote = async (id: number, voteType: 'up' | 'down') => {
+    try {
+      const res = await fetch(`/api/proposals/${id}/votes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voteType }),
+      });
 
-const handleDownvote = (id: number) => {
-  const updatedIdeas = ideas.map((idea) =>
-    idea.id === id ? { ...idea, downvotes: idea.downvotes + 1 } : idea
-  );
-  setIdeas(updatedIdeas);
-  localStorage.setItem("ideas", JSON.stringify(updatedIdeas));
-};
+      if (!res.ok) throw new Error('Failed to vote');
+
+      const updated: Idea = await res.json();
+      setIdeas((prev) =>
+        prev.map((idea) =>
+          idea.id === updated.id
+            ? {
+                ...idea,
+                upvotes: updated.upvotes ?? idea.upvotes,
+                downvotes: updated.downvotes ?? idea.downvotes,
+              }
+            : idea
+        )
+      );
+    } catch (err) {
+      console.error(err);
+      setError(t('ideas.error.voteFailed') || 'Failed to submit vote.');
+    }
+  };
 
 const SortButton = ({ option, label }: { option: SortOption; label: string }) => (
     <button
@@ -179,6 +213,12 @@ const SortButton = ({ option, label }: { option: SortOption; label: string }) =>
               {t('ideas.description')}
             </p>
           </div>
+
+          {error && (
+            <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
 
           {/* フィルターセクション */}
           <div className="mb-8 flex flex-col md:flex-row gap-4">
@@ -231,7 +271,7 @@ const SortButton = ({ option, label }: { option: SortOption; label: string }) =>
                       {/* ✅ UPVOTE */}
                       <div className="flex items-center gap-1.5 text-gray-500">
                         <button
-                          onClick={() => handleUpvote(idea.id)}
+                          onClick={() => handleVote(idea.id, 'up')}
                           className="p-2 rounded-full hover:bg-[#6366f1]/10 text-[#6366f1]"
                         >
                           <span className="material-symbols-outlined text-xl">
@@ -246,7 +286,7 @@ const SortButton = ({ option, label }: { option: SortOption; label: string }) =>
                       {/* ✅ DOWNVOTE */}
                       <div className="flex items-center gap-1.5 text-gray-500">
                         <button
-                          onClick={() => handleDownvote(idea.id)}
+                          onClick={() => handleVote(idea.id, 'down')}
                           className="p-2 rounded-full hover:bg-gray-200"
                         >
                           <span className="material-symbols-outlined text-xl">
@@ -315,22 +355,27 @@ const SortButton = ({ option, label }: { option: SortOption; label: string }) =>
 
         {/* コメント一覧（スクロール） */}
         <div className="flex-grow p-6 overflow-y-auto space-y-6">
-        {activeIdeaComments.length ? (
-            activeIdeaComments.map((c, i) => (
+        {loadingComments ? (
+          <p className="text-sm text-gray-500">Loading comments...</p>
+        ) : activeIdeaComments.length ? (
+          activeIdeaComments.map((c) => (
             <div
-                key={i}
-                className="pb-3 border-b border-gray-100 last:border-0"
+              key={c.id}
+              className="pb-3 border-b border-gray-100 last:border-0"
             >
-                <p className="text-sm font-bold text-gray-800">
-                {c.userName}
-                </p>
-                <p className="text-sm text-gray-600 mt-1">{c.text}</p>
+              <p className="text-sm font-bold text-gray-800">
+                {c.user_name || 'Anonymous'}
+              </p>
+              <p className="text-xs text-gray-400">
+                {formatDateTime(c.created_at)}
+              </p>
+              <p className="text-sm text-gray-600 mt-1">{c.text || ''}</p>
             </div>
-            ))
+          ))
         ) : (
-            <p className="text-sm text-gray-500 italic">
+          <p className="text-sm text-gray-500 italic">
             No comments yet. Be the first to comment!
-            </p>
+          </p>
         )}
         </div>
 
