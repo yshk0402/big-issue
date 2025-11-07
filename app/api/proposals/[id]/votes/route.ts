@@ -2,12 +2,12 @@ import { NextResponse } from 'next/server';
 import { voteOnProposal, type ProposalVoteType } from '@/app/lib/data';
 
 type RouteContext = {
-  params: Promise<{ id: string }> | { id: string };
+  params: Promise<{ id: string }>;
 };
 
 export async function POST(request: Request, context: RouteContext) {
-  const params = await context.params;
-  const proposalId = Number(params.id);
+  const { id } = await context.params;
+  const proposalId = Number(id);
 
   if (!Number.isFinite(proposalId) || proposalId <= 0) {
     return NextResponse.json({ message: 'Invalid proposal id' }, { status: 400 });
