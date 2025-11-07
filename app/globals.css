@@ -1,0 +1,18 @@
+@import "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Ensure full height for layout calculations */
+html,
+body,
+body > div:first-child,
+div#__next,
+div#__next > div {
+  height: 100%;
+}
+
+body {
+  @apply font-sans bg-background text-[#1A1A1A];
+}
