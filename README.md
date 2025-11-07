@@ -94,6 +94,17 @@ yaml
 
 ---
 
+## ✅ Git 設定
+
+このプロジェクトに貢献する際は、以下のGitユーザー情報を設定してください。
+
+```bash
+git config user.name "YSato"
+git config user.email "user@example.com" 
+```
+
+---
+
 ## ✅ デプロイ（Vercel）
 
 1. GitHub リポジトリを作成  
