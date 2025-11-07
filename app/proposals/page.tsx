@@ -1,123 +1,162 @@
 "use client";
-import Link from "next/link";
-import { useState, useEffect } from "react";
 
-type Proposal = {
-  id: number;
-  author: string;
-  content: string;
-  votes: number;
-  date: string;
+import { useEffect, useState } from "react";
+import { getProposals, createProposal, updateProposalVotes, type Proposal } from "@/app/lib/data";
+import { useTranslation } from "../hooks/useTranslation";
+
+const formatDateTime = (iso: string | null | undefined) => {
+  if (!iso) return "—";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "—";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate()
+  ).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(
+    date.getMinutes()
+  ).padStart(2, "0")}`;
 };
 
 export default function ProposalsPage() {
+  const { t } = useTranslation();
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [newProposal, setNewProposal] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // 初期読み込み時にlocalStorageからデータ取得
-  useEffect(() => {
-    const saved = localStorage.getItem("proposals");
-    if (saved) {
-      setProposals(JSON.parse(saved));
-    } else {
-      // 初期データ（初回のみ）
-      const initial = [
-        { id: 1, author: "@elon.musk", content: "Add dark mode feature", votes: 128, date: "2023-10-26" },
-        { id: 2, author: "@satya.nadella", content: "Add gamification badges", votes: 94, date: "2023-10-25" },
-      ];
-      setProposals(initial);
-      localStorage.setItem("proposals", JSON.stringify(initial));
+  const fetchProposals = async () => {
+    try {
+      setLoading(true);
+      const fetchedProposals = await getProposals();
+      setProposals(fetchedProposals);
+      setError(null);
+    } catch (err) {
+      console.error("Failed to fetch proposals:", err);
+      setError(
+        "Failed to fetch proposals. Make sure Supabase is configured before using this page."
+      );
+    } finally {
+      setLoading(false);
     }
-  }, []);
-
-  // proposalsが変化するたびに保存
-  useEffect(() => {
-    localStorage.setItem("proposals", JSON.stringify(proposals));
-  }, [proposals]);
-
-  // 投稿処理
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newProposal.trim()) return;
-    const newItem: Proposal = {
-      id: Date.now(),
-      author: "@you",
-      content: newProposal.trim(),
-      votes: 0,
-      date: new Date().toISOString().slice(0, 10),
-    };
-    setProposals([newItem, ...proposals]);
-    setNewProposal("");
   };
 
-  // 投票処理
-  const handleVote = (id: number) => {
-    setProposals(
-      proposals.map((x) =>
-        x.id === id ? { ...x, votes: x.votes + 1 } : x
-      )
-    );
+  useEffect(() => {
+    fetchProposals();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProposal.trim()) return;
+    try {
+      setSubmitting(true);
+      await createProposal(newProposal.trim());
+      setNewProposal("");
+      await fetchProposals();
+    } catch (err) {
+      console.error("Failed to create proposal:", err);
+      setError("Failed to create proposal. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleVote = async (id: number) => {
+    try {
+      const target = proposals.find((p) => p.id === id);
+      if (!target) return;
+      await updateProposalVotes(id, (target.upvotes ?? 0) + 1);
+      await fetchProposals();
+    } catch (err) {
+      console.error("Failed to update vote:", err);
+      setError("Could not register your vote. Please try again.");
+    }
   };
 
   return (
-    <div className="flex min-h-screen bg-background-light dark:bg-background-dark font-display text-gray-800 dark:text-gray-200">
-      {/* サイドバー */}
-      <aside className="w-64 bg-white dark:bg-[#182c27] flex flex-col p-4 border-r border-gray-200 dark:border-gray-700">
-        <h1 className="text-lg font-bold text-gray-900 dark:text-white mb-6">GOAT App</h1>
-        <nav className="flex flex-col gap-2 flex-grow">
-          <Link className="px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800" href="/">🏠 Home</Link>
-          <Link className="px-3 py-2 rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300" href="/proposals">💡 Proposals</Link>
-        </nav>
-      </aside>
+    <main className="flex-1 p-4 md:p-8 lg:p-12">
+      <div className="max-w-4xl mx-auto space-y-8">
+        <header className="space-y-2">
+          <p className="text-sm uppercase tracking-wide text-indigo-500 font-semibold">
+            Supabase Prototype
+          </p>
+          <h1 className="text-3xl md:text-4xl font-black tracking-tight text-gray-900">
+            {t("ideas.title")}
+          </h1>
+          <p className="text-gray-500">Server-backed proposals powered by Supabase.</p>
+        </header>
 
-      {/* メイン */}
-      <main className="flex-1 p-6 md:p-8 lg:p-12 overflow-y-auto">
-        <div className="max-w-3xl mx-auto">
-          <h1 className="text-3xl font-black mb-6">Users’ Proposals</h1>
-
-          {/* 投稿フォーム */}
-          <form onSubmit={handleSubmit} className="mb-6 flex gap-3">
-            <input
-              type="text"
-              placeholder="提案を入力してください..."
-              className="flex-1 p-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#182c27]"
-              value={newProposal}
-              onChange={(e) => setNewProposal(e.target.value)}
-            />
+        <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-200 p-4 md:p-6 shadow-sm space-y-4">
+          <label className="text-sm font-semibold text-gray-700" htmlFor="new-proposal">
+            Submit a new proposal
+          </label>
+          <textarea
+            id="new-proposal"
+            value={newProposal}
+            onChange={(e) => setNewProposal(e.target.value)}
+            placeholder={t("home.inputPlaceholder")}
+            className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none p-3 min-h-[90px]"
+          />
+          <div className="flex justify-end">
             <button
               type="submit"
-              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
+              disabled={!newProposal.trim() || submitting}
+              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors disabled:bg-indigo-300"
             >
-              投稿
+              <span className="material-symbols-outlined text-base">send</span>
+              {submitting ? "Submitting..." : "Post Proposal"}
             </button>
-          </form>
+          </div>
+        </form>
 
-          {/* 提案リスト */}
-          <div className="flex flex-col gap-4">
-            {proposals.map((p) => (
-              <div
-                key={p.id}
-                className="rounded-xl bg-white dark:bg-[#182c27] border border-gray-200 dark:border-gray-700 p-4"
+        {error && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            {error}
+          </div>
+        )}
+
+        <section className="space-y-4">
+          {loading ? (
+            <p className="text-gray-500">Loading proposals...</p>
+          ) : proposals.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-gray-300 bg-white p-6 text-center text-gray-500">
+              No proposals stored in Supabase yet.
+            </div>
+          ) : (
+            proposals.map((proposal) => (
+              <article
+                key={proposal.id}
+                className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
               >
-                <div className="flex justify-between items-start">
+                <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="font-semibold">{p.content}</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {p.author} ・ {p.date}
+                    <p className="text-lg font-semibold text-gray-900">
+                      {proposal.text || "Untitled proposal"}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Submitted {formatDateTime(proposal.created_at)}
                     </p>
                   </div>
+                  <div className="flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-700">
+                    <span className="material-symbols-outlined text-base text-indigo-600">thumb_up</span>
+                    {proposal.upvotes ?? 0}
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-gray-500">
+                    Downvotes: <span className="font-semibold text-gray-700">{proposal.downvotes ?? 0}</span>
+                  </p>
                   <button
-                    onClick={() => handleVote(p.id)}
-                    className="text-primary hover:underline"
+                    onClick={() => handleVote(proposal.id)}
+                    className="inline-flex items-center gap-2 rounded-full border border-indigo-200 px-4 py-2 text-sm font-semibold text-indigo-600 hover:bg-indigo-50"
                   >
-                    👍 {p.votes}
+                    <span className="material-symbols-outlined text-base">thumb_up</span>
+                    Upvote
                   </button>
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </main>
-    </div>
+              </article>
+            ))
+          )}
+        </section>
+      </div>
+    </main>
   );
 }
