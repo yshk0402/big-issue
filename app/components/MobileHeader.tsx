@@ -7,7 +7,7 @@ interface MobileHeaderProps {
 }
 
 export default function MobileHeader({ toggleSidebar }: MobileHeaderProps) {
-  const { t, locale, setLocale } = useTranslation();
+  const { locale, setLocale } = useTranslation();
 
   const getTitle = () => {
     return "GOAT";

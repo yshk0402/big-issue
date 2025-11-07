@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useTranslation } from '../hooks/useTranslation';
 import { Dispatch, SetStateAction } from 'react';
 
@@ -42,7 +43,14 @@ export default function Sidebar({ isSidebarOpen, setSidebarOpen }: SidebarProps)
             href="/"
             onClick={handleLinkClick}
             className="size-10 rounded-lg overflow-hidden bg-white flex items-center justify-center">
-            <img src="/logo.png" alt="Logo" className="w-8 h-8 object-contain" />
+            <Image
+              src="/logo.png"
+              alt="GOAT Logo"
+              width={32}
+              height={32}
+              priority
+              className="w-8 h-8 object-contain"
+            />
           </Link>
         </div>
         <nav className="flex flex-col gap-2 flex-grow">

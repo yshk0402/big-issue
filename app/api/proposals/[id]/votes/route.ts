@@ -1,13 +1,7 @@
 import { NextResponse } from 'next/server';
 import { voteOnProposal, type ProposalVoteType } from '@/app/lib/data';
 
-type Params = {
-  params: {
-    id: string;
-  };
-};
-
-export async function POST(request: Request, { params }: Params) {
+export async function POST(request: Request, { params }: { params: { id: string } }) {
   const proposalId = Number(params.id);
 
   if (!Number.isFinite(proposalId) || proposalId <= 0) {
