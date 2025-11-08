@@ -18,6 +18,11 @@ export type Comment = {
   text: string | null;
 };
 
+export type BigIssueCounts = {
+  agree: number;
+  disagree: number;
+};
+
 export async function getProposals(): Promise<Proposal[]> {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
@@ -137,4 +142,94 @@ export async function createComment({ proposalId, text, userName }: CreateCommen
   }
 
   return data;
+}
+
+export async function getBigIssueCounts(): Promise<BigIssueCounts> {
+  const supabase = getSupabaseClient();
+  try {
+    const [agreeRes, disagreeRes] = await Promise.all([
+      supabase
+        .from('big_issue_votes')
+        .select('id', { count: 'exact', head: true })
+        .eq('choice', 'agree'),
+      supabase
+        .from('big_issue_votes')
+        .select('id', { count: 'exact', head: true })
+        .eq('choice', 'disagree'),
+    ]);
+
+    if (agreeRes.error || disagreeRes.error) {
+      throw agreeRes.error || disagreeRes.error;
+    }
+
+    return {
+      agree: agreeRes.count ?? 0,
+      disagree: disagreeRes.count ?? 0,
+    };
+  } catch (error) {
+    console.error('Error fetching big issue counts:', error);
+    throw new Error('Failed to fetch big issue counts.');
+  }
+}
+
+const isUuid = (value: string | null | undefined): value is string =>
+  typeof value === 'string' && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value);
+
+export async function getBigIssueVoteChoice(userId: string | null): Promise<ProposalVoteType | null> {
+  if (!isUuid(userId)) {
+    return null;
+  }
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('big_issue_votes')
+    .select('choice')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error fetching user big issue vote:', error);
+    throw new Error('Failed to fetch user vote.');
+  }
+
+  const choice = data?.choice;
+  return choice === 'agree' || choice === 'disagree' ? choice : null;
+}
+
+export async function submitBigIssueVote(userId: string, choice: ProposalVoteType): Promise<BigIssueCounts> {
+  if (!isUuid(userId)) {
+    throw new Error('Invalid user id.');
+  }
+  const supabase = getSupabaseClient();
+  const { data: existing, error: fetchError } = await supabase
+    .from('big_issue_votes')
+    .select('id')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (fetchError) {
+    console.error('Error reading existing vote:', fetchError);
+    throw new Error('Failed to submit vote.');
+  }
+
+  let mutationError;
+
+  if (existing) {
+    const { error } = await supabase
+      .from('big_issue_votes')
+      .update({ choice })
+      .eq('user_id', userId);
+    mutationError = error;
+  } else {
+    const { error } = await supabase
+      .from('big_issue_votes')
+      .insert({ user_id: userId, choice });
+    mutationError = error;
+  }
+
+  if (mutationError) {
+    console.error('Error submitting big issue vote:', mutationError);
+    throw new Error('Failed to submit vote.');
+  }
+
+  return getBigIssueCounts();
 }
