@@ -33,5 +33,7 @@
   "vote.subQuestion": "私たちのプラットフォームの次の大きな機能を決定するのを手伝ってください。あなたの意見は貴重です！",
   "vote.agree": "賛成",
   "vote.disagree": "反対",
-  "vote.totalVotes": "総投票数"
+  "vote.totalVotes": "総投票数",
+  "vote.error.fetch": "投票状況の取得に失敗しました。しばらくしてから再度お試しください。",
+  "vote.error.submit": "投票の送信に失敗しました。時間をおいて再度お試しください。"
 }

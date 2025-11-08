@@ -3,7 +3,7 @@
 GOAT は、**ユーザー投票によってプロダクトの進化方針が決まる、完全民主制のアプリ・プラットフォーム**です。  
 「Auth を作るべきか？」「次に何を実装すべきか？」など、すべての意思決定をコミュニティが行います。
 
-アプリ内部の機能（提案投稿、コメント、投票、Big Issue 投票など）はすべてフロントエンドで完結しており、将来的にバックエンドへ移行できる設計になっています。
+提案投稿やコメント、Big Issue 投票は現在 Supabase に保存され、ブラウザやデバイスを跨いでも同じデータを共有できます。
 
 ---
 
@@ -13,7 +13,7 @@ GOAT は、**ユーザー投票によってプロダクトの進化方針が決�
 |------|----------|
 | Frontend | Next.js 14（App Router） |
 | Styling | Tailwind CSS |
-| State | React Hooks + localStorage（暫定） |
+| State / Data | React Hooks + Supabase |
 | Icons | Material Symbols Outlined |
 | Images | next/image |
 | Build / Deploy | Vercel 推奨 |
@@ -23,23 +23,22 @@ GOAT は、**ユーザー投票によってプロダクトの進化方針が決�
 ## ✅ 機能一覧
 
 ### ### 1. Users' Proposals（ユーザー提案）
-- 匿名ユーザーとして提案を投稿
+- 匿名ユーザーとして提案を投稿（Supabase に保存）
 - ランダム生成のハンドルネーム（例：`023 Comet`）
 - 提案の一覧表示（新しい順）
-- Upvote / Downvote（ローカル保存）
+- Upvote / Downvote（API 経由で集計）
 - コメント数のカウント
 
 ### ### 2. コメント機能
 - コメントモーダル表示（固定サイズ）
 - 新しいコメントが上に積み上がる
-- localStorage にて提案ごとに保存
+- Supabase にて提案ごとに保存
 - UI は GOAT テーマに合わせて統一
 
 ### ### 3. Big Issue（サイト運営側が設定する大質問）
 - Yes/No（Agree/Disagree）投票
-- 1 ブラウザ 1 票
-- グラフ表示（リアルタイム更新）
-- localStorage に保存（後で DB に接続可能）
+- 1 ブラウザ 1 票（ブラウザ生成の UUID を保存）
+- グラフ表示（API レスポンスをリアルタイムに反映）
 
 ### ### 4. Sidebar（共通 UI）
 - Home
@@ -74,23 +73,20 @@ yaml
 
 ## ✅ ローカル開発
 
-### 1. 依存インストール
-npm install
-
-shell
-コードをコピーする
-
-### 2. 開発サーバー起動
-npm run dev
-
-shell
-コードをコピーする
-
-### 3. ブラウザで確認  
-http://localhost:3000
-
-yaml
-コードをコピーする
+1. 依存インストール
+   ```bash
+   npm install
+   ```
+2. Supabase の環境変数を `big-issue/.env.local` に設定
+   ```bash
+   NEXT_PUBLIC_SUPABASE_URL=...your project url...
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=...your anon key...
+   ```
+3. 開発サーバー起動
+   ```bash
+   npm run dev
+   ```
+4. ブラウザで確認: http://localhost:3000
 
 ---
 
@@ -115,7 +111,7 @@ git config user.email "user@example.com"
 
 ## ✅ 今後のバックエンド化（設計案）
 
-現在は localStorage で一時的に保存していますが、以下のように段階的に拡張可能です。
+現在は Supabase を利用していますが、以下のように段階的に拡張可能です。
 
 ### **✅ Phase 1: Supabase or Firebase 導入**
 - 提案、投票、コメントを DB 化

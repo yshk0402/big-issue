@@ -33,5 +33,7 @@
   "vote.subQuestion": "Help us decide on the next big feature for our platform. Your input is valuable!",
   "vote.agree": "Agree",
   "vote.disagree": "Disagree",
-  "vote.totalVotes": "Total Votes"
+  "vote.totalVotes": "Total Votes",
+  "vote.error.fetch": "Failed to load votes. Please try again.",
+  "vote.error.submit": "Failed to submit your vote. Please try again."
 }
