@@ -21,6 +21,15 @@ type Comment = {
   created_at: string;
 };
 
+const errorKeyMap = {
+  fetch: 'ideas.error.fetchFailed',
+  commentFetch: 'ideas.error.commentFetchFailed',
+  commentPost: 'ideas.error.commentFailed',
+  vote: 'ideas.error.voteFailed',
+} as const;
+
+type ErrorKey = keyof typeof errorKeyMap;
+
 // ヘルパー関数: 日時フォーマット
 const formatDateTime = (isoString: string | undefined) => {
   if (!isoString) return "—";
@@ -46,17 +55,20 @@ export default function IdeasPage() {
   const [newComment, setNewComment] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingComments, setLoadingComments] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errorKey, setErrorKey] = useState<ErrorKey | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOption, setSortOption] = useState<SortOption>("newest");
+  const errorMessage = errorKey ? t(errorKeyMap[errorKey]) : null;
 
   // --- 初期ロード ---
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchIdeas = async () => {
       setLoading(true);
-      setError(null);
+      setErrorKey(null);
       try {
-        const res = await fetch('/api/proposals', { cache: 'no-store' });
+        const res = await fetch('/api/proposals', { cache: 'no-store', signal: controller.signal });
         if (!res.ok) throw new Error('Failed to fetch proposals');
         const data: { id: number; text: string; created_at: string; upvotes: number; downvotes: number }[] = await res.json();
         const mapped = data.map((proposal) => ({
@@ -68,15 +80,17 @@ export default function IdeasPage() {
         }));
         setIdeas(mapped);
       } catch (err) {
+        if ((err as Error).name === 'AbortError') return;
         console.error(err);
-        setError(t('ideas.error.fetchFailed') || 'Failed to fetch proposals. Please try again.');
+        setErrorKey('fetch');
       } finally {
         setLoading(false);
       }
     };
 
     fetchIdeas();
-  }, [t]);
+    return () => controller.abort();
+  }, []);
 
   // --- 検索フィルタリング ---
   const filteredIdeas = useMemo(() => {
@@ -128,15 +142,18 @@ export default function IdeasPage() {
       setNewComment('');
     } catch (err) {
       console.error(err);
-      setError(t('ideas.error.commentFailed') || 'Failed to add comment.');
+      setErrorKey('commentPost');
     }
   };
 
   const openComments = async (idea: Idea) => {
     setActiveIdea(idea);
     setShowComments(true);
+    if (comments[idea.id]?.length) {
+      return;
+    }
     setLoadingComments(true);
-    setError(null);
+    setErrorKey(null);
     try {
       const res = await fetch(`/api/comments?proposalId=${idea.id}`, { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to fetch comments');
@@ -144,7 +161,7 @@ export default function IdeasPage() {
       setComments((prev) => ({ ...prev, [idea.id]: data }));
     } catch (err) {
       console.error(err);
-      setError(t('ideas.error.commentFetchFailed') || 'Failed to load comments.');
+      setErrorKey('commentFetch');
     } finally {
       setLoadingComments(false);
     }
@@ -185,7 +202,7 @@ export default function IdeasPage() {
       );
     } catch (err) {
       console.error(err);
-      setError(t('ideas.error.voteFailed') || 'Failed to submit vote.');
+      setErrorKey('vote');
     }
   };
 
@@ -214,9 +231,9 @@ const SortButton = ({ option, label }: { option: SortOption; label: string }) =>
             </p>
           </div>
 
-          {error && (
+          {errorMessage && (
             <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-              {error}
+              {errorMessage}
             </div>
           )}
 

@@ -12,6 +12,7 @@
   "home.card3.text": "Suggest a clear, implementable solution for the team.",
   "home.inputPlaceholder": "e.g., Add a dark mode feature for the app...",
   "home.toast": "🎉 Your Proposal is Posted!!!",
+  "home.error.submit": "Failed to submit proposal. Please try again.",
   "ideas.title": "Users’ Proposals",
   "ideas.description": "Browse and vote on ideas submitted by the community.",
   "ideas.searchPlaceholder": "Search proposals by keyword...",

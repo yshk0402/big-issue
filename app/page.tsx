@@ -13,6 +13,8 @@ type LayoutProps = {
   handleSubmit: () => void;
   t: (key: string) => string;
   isDesktop: boolean;
+  isSubmitting: boolean;
+  errorMessage: string | null;
 };
 
 // --- Child Components for Layouts ---
@@ -27,7 +29,7 @@ const Card = ({ icon, title, text }: { icon: string; title: string; text: string
   </div>
 );
 
-const SubmissionForm = ({ input, setInput, handleSubmit, t, isDesktop }: LayoutProps) => {
+const SubmissionForm = ({ input, setInput, handleSubmit, t, isDesktop, isSubmitting, errorMessage }: LayoutProps) => {
   const handleBlur = () => {
     // On mobile, scroll to top when keyboard closes via tap outside
     if (!isDesktop) {
@@ -56,10 +58,13 @@ const SubmissionForm = ({ input, setInput, handleSubmit, t, isDesktop }: LayoutP
         onClick={handleSubmit}
         aria-label="Submit idea"
         className="absolute right-2.5 top-2.5 flex items-center justify-center size-10 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-400 disabled:bg-indigo-400"
-        disabled={!input.trim()}
+        disabled={!input.trim() || isSubmitting}
       >
         <span className="material-symbols-outlined text-xl">arrow_upward</span>
       </button>
+      {errorMessage && (
+        <p className="mt-3 text-sm text-red-600">{errorMessage}</p>
+      )}
     </div>
   );
 };
@@ -115,6 +120,8 @@ export default function HomePage() {
   const [isClient, setIsClient] = useState(false);
   const [input, setInput] = useState("");
   const [toastVisible, setToastVisible] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
   const router = useRouter();
   const { t } = useTranslation();
   const isDesktop = useMediaQuery('(min-width: 768px)');
@@ -123,25 +130,30 @@ export default function HomePage() {
     setIsClient(true);
   }, []);
 
-  const handleSubmit = () => {
-    if (!input.trim()) return;
-    const newIdea = {
-      id: Date.now(),
-      text: input.trim(),
-      upvotes: 0,
-      downvotes: 0,
-      date: new Date().toISOString(),
-    };
+  const handleSubmit = async () => {
+    if (!input.trim() || submitting) return;
+    setSubmitting(true);
+    setSubmissionError(null);
     try {
-      const stored = localStorage.getItem("ideas");
-      const currentIdeas = stored ? JSON.parse(stored) : [];
-      localStorage.setItem("ideas", JSON.stringify([newIdea, ...currentIdeas]));
-    } catch (e) {
-      console.error("Error saving to localStorage", e);
+      const res = await fetch('/api/proposals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: input.trim() }),
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to submit proposal');
+      }
+
+      setInput('');
+      setToastVisible(true);
+      setTimeout(() => setToastVisible(false), 4000);
+    } catch (error) {
+      console.error('Failed to submit proposal', error);
+      setSubmissionError(t('home.error.submit'));
+    } finally {
+      setSubmitting(false);
     }
-    setInput("");
-    setToastVisible(true);
-    setTimeout(() => setToastVisible(false), 4000);
   };
 
   const handleToastClick = () => {
@@ -149,7 +161,7 @@ export default function HomePage() {
     router.push("/ideas");
   };
 
-  const layoutProps = { input, setInput, handleSubmit, t, isDesktop };
+  const layoutProps = { input, setInput, handleSubmit, t, isDesktop, isSubmitting: submitting, errorMessage: submissionError };
 
   if (!isClient) {
     return (

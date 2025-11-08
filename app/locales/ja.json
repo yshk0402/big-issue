@@ -12,6 +12,7 @@
   "home.card3.text": "チームが実装可能な、明確な解決策を提案してください。",
   "home.inputPlaceholder": "例：アプリにダークモード機能を追加する...",
   "home.toast": "🎉 提案が投稿されました！",
+  "home.error.submit": "提案の送信に失敗しました。時間をおいて再度お試しください。",
   "ideas.title": "ユーザー提案",
   "ideas.description": "コミュニティから投稿されたアイデアを閲覧し、投票してください。",
   "ideas.searchPlaceholder": "キーワードで提案を検索...",
