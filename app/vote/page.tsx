@@ -7,38 +7,59 @@ import { useTranslation } from "../hooks/useTranslation";
 type Counts = { agree: number; disagree: number };
 type Choice = "agree" | "disagree" | null;
 
-const STORAGE_COUNTS = "bigIssueVote_counts";
-const STORAGE_CHOICE = "bigIssueVote_choice";
+const USER_ID_KEY = "bigIssueVote_userId";
 
-// 既定値（72% / 28% → Total 1284）
-const DEFAULT_COUNTS: Counts = { agree: 0, disagree: 0 };
+const errorKeyMap = {
+  fetch: 'vote.error.fetch',
+  submit: 'vote.error.submit',
+} as const;
+
+type ErrorKey = keyof typeof errorKeyMap;
 
 export default function VotePage() {
   const { t } = useTranslation();
-  const [counts, setCounts] = useState<Counts>(DEFAULT_COUNTS);
+  const [counts, setCounts] = useState<Counts>({ agree: 0, disagree: 0 });
   const [choice, setChoice] = useState<Choice>(null);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [errorKey, setErrorKey] = useState<ErrorKey | null>(null);
+  const errorMessage = errorKey ? t(errorKeyMap[errorKey]) : null;
 
-  // 初期化：localStorage から復元
   useEffect(() => {
-    setLoading(true);
-    const timer = setTimeout(() => {
-      try {
-        const savedCounts = window.localStorage.getItem(STORAGE_COUNTS);
-        const savedChoice = window.localStorage.getItem(STORAGE_CHOICE);
-
-        if (savedCounts) setCounts(JSON.parse(savedCounts));
-        if (savedChoice === "agree" || savedChoice === "disagree") {
-          setChoice(savedChoice);
-        }
-      } catch {
-        /* 破損していたら既定値を継続 */
-      }
-      setLoading(false);
-    }, 500); // 500ms待機してローディングを見せる
-
-    return () => clearTimeout(timer);
+    if (typeof window === 'undefined') return;
+    let stored = window.localStorage.getItem(USER_ID_KEY);
+    if (!stored) {
+      stored = self.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2);
+      window.localStorage.setItem(USER_ID_KEY, stored);
+    }
+    setUserId(stored);
   }, []);
+
+  useEffect(() => {
+    if (!userId) return;
+    const controller = new AbortController();
+    const fetchCounts = async () => {
+      setLoading(true);
+      setErrorKey(null);
+      try {
+        const res = await fetch(`/api/votes?userId=${userId}`, { cache: 'no-store', signal: controller.signal });
+        if (!res.ok) throw new Error('Failed to fetch votes');
+        const data = await res.json();
+        setCounts(data.counts);
+        setChoice(data.choice);
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return;
+        console.error(err);
+        setErrorKey('fetch');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCounts();
+    return () => controller.abort();
+  }, [userId]);
 
   // 合計と割合
   const total = useMemo(() => counts.agree + counts.disagree, [counts]);
@@ -49,32 +70,28 @@ export default function VotePage() {
   );
   const disagreePct = 100 - agreePct;
 
-  // 票の更新（1ブラウザ1票 / 切替方式）
-  const castVote = (next: Exclude<Choice, null>) => {
-    setCounts((prev) => {
-      const nextCounts = { ...prev };
+  const castVote = async (next: Exclude<Choice, null>) => {
+    if (!userId || submitting || choice === next) return;
+    setSubmitting(true);
+    setErrorKey(null);
+    try {
+      const res = await fetch('/api/votes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, choice: next }),
+      });
 
-      // 同じ票を連打 → 無視
-      if (choice === next) return prev;
+      if (!res.ok) throw new Error('Failed to submit vote');
 
-      // 古い選択を取り消し
-      if (choice === "agree") nextCounts.agree = Math.max(0, nextCounts.agree - 1);
-      if (choice === "disagree")
-        nextCounts.disagree = Math.max(0, nextCounts.disagree - 1);
-
-      // 新しい選択を +1
-      if (next === "agree") nextCounts.agree += 1;
-      if (next === "disagree") nextCounts.disagree += 1;
-
-      // 永続化
-      try {
-        window.localStorage.setItem(STORAGE_COUNTS, JSON.stringify(nextCounts));
-        window.localStorage.setItem(STORAGE_CHOICE, next);
-      } catch {}
-
-      setChoice(next);
-      return nextCounts;
-    });
+      const data = await res.json();
+      setCounts(data.counts);
+      setChoice(data.choice);
+    } catch (err) {
+      console.error(err);
+      setErrorKey('submit');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -96,6 +113,11 @@ export default function VotePage() {
 
             {/* ✅ 投票カード */}
             <div className="bg-white border border-gray-200 rounded-xl p-6 sm:p-8 shadow-sm">
+              {errorMessage && (
+                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  {errorMessage}
+                </div>
+              )}
               <div className="flex flex-col gap-2">
                 <p className="text-zinc-900 text-xl md:text-2xl font-bold tracking-[-0.015em]">
                   {t('vote.question')}
@@ -155,6 +177,7 @@ export default function VotePage() {
                       : "bg-[#10A37F] hover:bg-[#0E8A6B]"
                     }
                   `}
+                  disabled={submitting}
                 >
                   {t('vote.agree')}
                 </button>
@@ -170,6 +193,7 @@ export default function VotePage() {
                       : "bg-[#D3302F] hover:bg-[#B92A29]"
                     }
                   `}
+                  disabled={submitting}
                 >
                   {t('vote.disagree')}
                 </button>
